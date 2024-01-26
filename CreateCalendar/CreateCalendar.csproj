@@ -334,6 +334,7 @@
     <Compile Include="CustomSettings\ExcelRosterSettings.cs" />
     <Compile Include="CustomSettings\IEventSettings.cs" />
     <Compile Include="CustomSettings\IExcelFileSettings.cs" />
+    <Compile Include="CustomSettings\OldAppointmentOptions.cs" />
     <Compile Include="DataTransfer\CalDetails.cs" />
     <Compile Include="DataTransfer\DateRangeComments.cs" />
     <Compile Include="DataTransfer\EveryoneRoster.cs" />

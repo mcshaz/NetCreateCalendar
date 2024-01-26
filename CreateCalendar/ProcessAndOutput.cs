@@ -43,7 +43,7 @@ namespace CreateCalendar
                 {
                     var cw = new CalendarWriter(ms);
                     if (existingAppts.Any())
-                        await ConglomerateExisting.Conglomerate(existingAppts, coalesced, cw);
+                        await ConglomerateExisting.Conglomerate(existingAppts, coalesced, cw, eventSettings.OldAppointments);
 
                     var drw = new DayRangeToIcsMapper(cw, eventSettings);
                     foreach (var c in coalesced)

@@ -1,4 +1,5 @@
 ﻿using CreateCalendar.CreateIcs;
+using CreateCalendar.CustomSettings;
 using CreateCalendar.DataTransfer;
 using System;
 using System.Collections.Generic;
@@ -13,7 +14,8 @@ namespace CreateCalendar.ReadCal
     {
         public static async Task Conglomerate(IEnumerable<ApptDetails> oldAppts, 
             IEnumerable<PerUserRosterDayRange> contextAppts, 
-            CalendarWriter cw)
+            CalendarWriter cw,
+            OldAppointmentOptions oldAppointments)
         {
             /* 
              * divide into:
@@ -33,17 +35,20 @@ namespace CreateCalendar.ReadCal
                     ca.Created = ad.Created;
                 }
             }
-            var utcNow = DateTime.UtcNow;
-            foreach (var c in oldById.Values)
+            if (oldAppointments == OldAppointmentOptions.StatusCancelled)
             {
-                if (!c.IsCancelled)
+                var utcNow = DateTime.UtcNow;
+                foreach (var c in oldById.Values)
                 {
-                    c.IsCancelled = true;
-                    ++c.Sequence;
-                    c.LastModified = utcNow;
+                    if (!c.IsCancelled)
+                    {
+                        c.IsCancelled = true;
+                        ++c.Sequence;
+                        c.LastModified = utcNow;
+                    }
                     c.DtStamp = utcNow;
+                    await c.Write(cw);
                 }
-                await c.Write(cw);
             }
         }
     }

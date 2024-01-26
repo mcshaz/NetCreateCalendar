@@ -41,7 +41,7 @@ namespace TestRosterToCal
             var eventSettings = new MockEventSettings {
                 IcsFilename = "{0} PCCU SMO Roster.ics",
                 FormatShift = "{0} PCCU",
-                
+                OldAppointments = OldAppointmentOptions.StatusCancelled,
                 AppointmentKeyValues = new Dictionary<string, string>
                 {
                     { "LOCATION", "SCUH" },
@@ -75,7 +75,7 @@ namespace TestRosterToCal
             {
                 DateCommentsCol = 3,
                 IgnoreShifts = new[] { "RDO", "SD" },
-                NonAvailableShifts = new[] { "Leave", "PDL" }
+                NonAvailableShifts = new[] { "Leave", "PDL" }, 
             };
             var xlDataReader = new XlDataReader(
                 new Microsoft.Extensions.Logging.Abstractions.NullLogger<XlDataReader>(),
@@ -116,6 +116,7 @@ namespace TestRosterToCal
     {
         public string IcsFilename { get; set; } 
         public string FormatShift { get; set; } 
+        public OldAppointmentOptions OldAppointments { get; set; }
         public Dictionary<string, string> AppointmentKeyValues { get; set; }
     }
 }

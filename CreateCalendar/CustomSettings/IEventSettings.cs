@@ -6,6 +6,7 @@ namespace CreateCalendar.CustomSettings
     {
         string IcsFilename { get; }
         string FormatShift { get;  }
+        OldAppointmentOptions OldAppointments { get; }
         Dictionary<string, string> AppointmentKeyValues { get; }
     }
 }

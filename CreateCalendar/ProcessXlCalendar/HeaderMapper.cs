@@ -53,11 +53,16 @@ namespace CreateCalendar.ProcessXlCalendar
                 _colToSpecialShift = colToSpecialShift;
             }
         }
-        public void AddRow(IXLRow row)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="row"></param>
+        /// <returns>true if a date was found and the row was added</returns>
+        public bool AddRow(IXLRow row)
         {
             if (!row.Cell(_dateCol).TryGetValue(out DateTime dt))
             {
-                return;
+                return false;
             }
             var newCalDataRow = new ExcelCalDataRow
             {
@@ -95,6 +100,7 @@ namespace CreateCalendar.ProcessXlCalendar
                 }
             }
             Roster.Add(newCalDataRow);
+            return true;
         }
     }
 }

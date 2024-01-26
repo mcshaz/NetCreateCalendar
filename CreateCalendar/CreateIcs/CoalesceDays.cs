@@ -17,7 +17,7 @@ namespace CreateCalendar.CreateIcs
                 var otherShiftComparer = new EmployeeShiftComparer();
                 foreach (var d in rosterDays.Skip(1))
                 {
-                    var isSequentiialDay = d.Date.DayNumber - lastShift.Date.DayNumber == 1;
+                    var isSequentiialDay = d.Date.DayNumber - lastShift.EndDate.DayNumber == 1;
                     if (isSequentiialDay && d.Shift == lastShift.Shift)
                     {
                         lastShift.EndDate = d.Date;

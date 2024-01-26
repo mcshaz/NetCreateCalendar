@@ -22,6 +22,7 @@ namespace CreateCalendar.ProcessXlCalendar
         }
         public EveryoneRoster Process(Stream xlStream)
         {
+            const int abortAfterEmptyRows = 10;
             using (var excelWorkbook = new XLWorkbook(xlStream))
             {
                 var employees = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -34,13 +35,11 @@ namespace CreateCalendar.ProcessXlCalendar
                 var timer = new Stopwatch();
                 foreach (var ws in allWs)
                 {
-                    timer.Start();
-                    _logger.LogDebug($"enumerating rows of {ws.Name}");
-                    int rows = 0;
+                    int emptyRows = 0;
                     HeaderMapper headerMapper = null;
                     using (var rowsEnumerator = ws.RowsUsed().GetEnumerator())
                     {
-                        while (rowsEnumerator.MoveNext())
+                        while (rowsEnumerator.MoveNext() && emptyRows < abortAfterEmptyRows)
                         {
                             var dataRow = rowsEnumerator.Current;
                             if (headerMapper == null)
@@ -73,14 +72,12 @@ namespace CreateCalendar.ProcessXlCalendar
                             }
                             else
                             {
-                                headerMapper.AddRow(dataRow);
+                                emptyRows = headerMapper.AddRow(dataRow)
+                                    ? 0
+                                    : emptyRows + 1;
                             }
-                            ++rows;
                         }
                     }
-                    timer.Stop();
-                    _logger.LogDebug($"examined {rows} in {timer.ElapsedMilliseconds} ms = {timer.Elapsed.TotalMilliseconds/rows} ms/row");
-                    timer.Reset();
                     if (headerMapper != null)
                     {
                         dateShifts.AddRange(headerMapper.Roster);
