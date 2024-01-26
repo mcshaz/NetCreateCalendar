@@ -10,8 +10,8 @@ namespace CreateCalendar.CreateIcs
     {
         private readonly Stream _stream;
         private readonly Encoding _encoding;
-        private byte[] _icsContentFolder;
-        private byte[] _icsNewLine;
+        private readonly byte[] _icsContentFolder;
+        private readonly byte[] _icsNewLine;
 
         private const int _firstLineOctets = 75;
         private const int _subsequentLineOctets = 74;
@@ -53,12 +53,16 @@ namespace CreateCalendar.CreateIcs
                 _octetsRemaining = _subsequentLineOctets - copyLen;
             }
         }
-        public void WriteLine(params string[] text)
+        public void Write(params string[] text)
         {
             for (int i = 0; i < text.Length; ++i)
             {
                 Write(_encoding.GetBytes(ReplaceText(text[i])));
             }
+        }
+        public void WriteLine(params string[] text)
+        {
+            Write(text);
             Write(_icsNewLine);
         }
 

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO.Hashing;
 using System.Net.Http;
@@ -17,22 +18,48 @@ namespace CreateCalendar.Utilities
             }
             return hash;
         }
+        public static byte[] CreateXxHash128(params object[] objs)
+        {
+            return XxHash128.Hash(SequentialHashCodes(objs));
+        }
         public static byte[] CreateXxHash64(params object[] objs)
         {
-            byte[] hash = new byte[objs.Length * 4];
-
-            for (int i = 0; i < objs.Length; ++i)
-                Array.Copy(BitConverter.GetBytes(objs[i].GetHashCode()), 0, hash, i * 4, 4);
-            return XxHash64.Hash(hash);
+            return XxHash64.Hash(SequentialHashCodes(objs));
         }
 
         public static byte[] CreateXxHash32(params object[] objs)
         {
-            byte[] hash = new byte[objs.Length * 4];
+            return XxHash32.Hash(SequentialHashCodes(objs));
+        }
+        public static byte[] SequentialHashCodes(params object[] objs)
+        {
+            var byteList = new List<byte>(objs.Length * 4);
+            foreach(object obj in objs)
+            {
+                switch (obj)
+                {
+                    case byte[] b:
+                        byteList.AddRange(b);
+                        break;
+                    case Guid g:
+                        byteList.AddRange(g.ToByteArray());
+                        break;
+                    default:
+                        byteList.AddRange(BitConverter.GetBytes(obj.GetHashCode()));
+                        break;
+                }
+            }
+            return byteList.ToArray();
+        }
+        /*
+        public static byte[] SequentialHashCodes(params object[] objs)
+        {
+            byte[] byteArray = new byte[objs.Length * 4];
 
             for (int i = 0; i < objs.Length; ++i)
-                Array.Copy(BitConverter.GetBytes(objs[i].GetHashCode()), 0, hash, i * 4, 4);
-            return XxHash32.Hash(hash);
+                Array.Copy(BitConverter.GetBytes(objs[i].GetHashCode()), 0, byteArray, i * 4, 4);
+            return byteArray;
         }
-    }
+        */
+        }
 }

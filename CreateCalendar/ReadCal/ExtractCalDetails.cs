@@ -8,44 +8,24 @@ namespace CreateCalendar.ReadCal
 {
     internal static class ExtractCalDetails
     {
-        internal static async Task<CalDetails> Extract(StreamReader reader)
+        internal static async Task<IEnumerable<ApptDetails>> Extract(StreamReader reader)
         {
-            var calDetails = new CalDetails
-            {
-                Appointments = new List<ApptDetails>(),
-            };
+            var appointments = new List<ApptDetails>();
             const string beginAppt = "BEGIN:VEVENT";
-            const string endAppt = "END:VEVENT";
-            const string uid = "UID:";
-            const string dtStamp = "DTSTAMP:";
-            const string status = "STATUS:";
+
             string nextLine;
+            // advance to first appointment
             while ((nextLine = await reader.ReadLineAsync()) != null && nextLine != beginAppt) { }
-            if (nextLine != null)
+            while (nextLine == beginAppt)
             {
-                var apptDetails = new ApptDetails
-                {
-                    Content = new List<string> { beginAppt }
-                };
-                while ((nextLine = await reader.ReadLineAsync()) != null && nextLine != endAppt) {
-                    apptDetails.Content.Add(nextLine);
-                    if (nextLine.StartsWith(uid))
-                    {
-                        apptDetails.Uid = uid.Substring(uid.Length);
-                    }
-                    else if(nextLine.StartsWith(dtStamp))
-                    {
-                        apptDetails.LastUpdated = ICalDtTimeToNet(uid.Substring(dtStamp.Length));
-                    }
-                    else if(nextLine.StartsWith(status)) 
-                    {
-                        apptDetails.IsCancelled = uid.Substring(status.Length) == "CANCELLED";
-                    }
-                }
-                apptDetails.Content.Add(endAppt);
-                calDetails.Appointments.Add(apptDetails);
+                var apptDetails = new ApptDetails();
+                apptDetails.AddLine(nextLine);
+                while ((nextLine = await reader.ReadLineAsync()) != null && apptDetails.AddLine(nextLine))
+                { }
+                appointments.Add(apptDetails);
+                nextLine = await reader.ReadLineAsync();
             }
-            return calDetails;
+            return appointments;
         }
 
         public static DateTime ICalDtTimeToNet(string icalDtTime)

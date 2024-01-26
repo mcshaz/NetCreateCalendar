@@ -8,7 +8,7 @@ namespace CreateCalendar.CreateIcs
 {
     internal static class CoalesceDays
     {
-        public static IEnumerable<PerUserRosterDayRange> Coalesce(IEnumerable<PerUserRosterDay> rosterDays, string rosterName)
+        public static IEnumerable<PerUserRosterDayRange> Coalesce(IEnumerable<PerUserRosterDay> rosterDays, Guid rosterId)
         {
             var returnVar = new List<PerUserRosterDayRange>(rosterDays.Count());
             var lastShift = MapDayToRange(rosterDays.FirstOrDefault());
@@ -17,17 +17,20 @@ namespace CreateCalendar.CreateIcs
                 var otherShiftComparer = new EmployeeShiftComparer();
                 foreach (var d in rosterDays.Skip(1))
                 {
-                    if (d.Shift == lastShift.Shift && d.Date.DayNumber - lastShift.Date.DayNumber == 1)
+                    var isSequentiialDay = d.Date.DayNumber - lastShift.Date.DayNumber == 1;
+                    if (isSequentiialDay && d.Shift == lastShift.Shift)
                     {
                         lastShift.EndDate = d.Date;
-                        var lastShiftOthers = lastShift.Others[lastShift.Others.Count - 1];
-                        if (Enumerable.SequenceEqual(d.OtherEmployeesAvailable,
-                            lastShiftOthers.OtherEmployeesAvailable, 
-                            otherShiftComparer))
+                        var lastShiftOthers = lastShift.Others.LastOrDefault();
+                        if (lastShiftOthers != default
+                            && d.Date.DayNumber - lastShiftOthers.EndDate.DayNumber == 1
+                            && Enumerable.SequenceEqual(d.OtherEmployeesAvailable,
+                                lastShiftOthers.OtherEmployeesAvailable, 
+                                otherShiftComparer))
                         {
                             lastShiftOthers.EndDate = d.Date;
                         }
-                        else
+                        else if (d.OtherEmployeesAvailable.Any())
                         {
                             lastShift.Others.Add(new OthersDay
                             {
@@ -36,14 +39,34 @@ namespace CreateCalendar.CreateIcs
                                 OtherEmployeesAvailable = d.OtherEmployeesAvailable
                             });
                         }
+                        if (d.DateComment != null)
+                        {
+                            var lastShiftDateComments = lastShift.DateRangeComments.LastOrDefault();
+                            if (lastShiftDateComments != null
+                                && lastShiftDateComments.DateComment == d.DateComment
+                                && d.Date.DayNumber - lastShiftDateComments.EndDate.DayNumber == 1)
+                            {
+                                lastShiftDateComments.EndDate = d.Date;
+                            }
+                            else
+                            {
+                                lastShift.DateRangeComments.Add(new DateRangeComments
+                                {
+                                    Date = d.Date,
+                                    EndDate = d.Date,
+                                    DateComment = d.DateComment,
+                                });
+                            }
+                        }
                     }
                     else
                     {
-                        lastShift.UId = CreateUid(lastShift, rosterName);
+                        lastShift.UId = CreateUid(rosterId, lastShift);
                         returnVar.Add(lastShift);
                         lastShift = MapDayToRange(d);
                     }
                 }
+                lastShift.UId = CreateUid(rosterId, lastShift);
                 returnVar.Add(lastShift);
             }
             return returnVar;
@@ -51,11 +74,22 @@ namespace CreateCalendar.CreateIcs
         private static PerUserRosterDayRange MapDayToRange(PerUserRosterDay dayRoster)
         {
             if (dayRoster == null) { return null; }
+            var dateRangeComments = new List<DateRangeComments>();
+            if (!string.IsNullOrEmpty(dayRoster.DateComment))
+            {
+                dateRangeComments.Add(new DateRangeComments
+                {
+                    DateComment = dayRoster.DateComment,
+                    Date = dayRoster.Date,
+                    EndDate = dayRoster.Date
+                });
+            }
             return new PerUserRosterDayRange
             {
                 Date = dayRoster.Date,
                 EndDate = dayRoster.Date,
                 Shift = dayRoster.Shift,
+                DateRangeComments = dateRangeComments,
                 Others = new List<OthersDay> { 
                     new OthersDay { 
                         Date = dayRoster.Date, 
@@ -66,11 +100,11 @@ namespace CreateCalendar.CreateIcs
             };
         }
 
-        private static string CreateUid(PerUserRosterDayRange dayRangeRoster, string rosterName)
+        private static string CreateUid(Guid rosterId, PerUserRosterDayRange dayRangeRoster)
         {
-            var hash = HashHelpers.CreateXxHash64(rosterName, dayRangeRoster.Date, dayRangeRoster.Shift);
+            var hash = HashHelpers.CreateXxHash64(rosterId, dayRangeRoster.Shift, dayRangeRoster.Date, dayRangeRoster.EndDate);
             var base64Hash = Convert.ToBase64String(hash);
-            // remove last '=' filling bits
+            // to do remove last '=' filling last byte
             return $"{base64Hash.Substring(0, base64Hash.Length - 1)}@bmcsh.scuh";
         }
     }

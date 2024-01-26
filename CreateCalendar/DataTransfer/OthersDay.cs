@@ -1,12 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CreateCalendar.DataTransfer
 {
-    internal class OthersDay
+    internal class OthersDay : IDateOnlyRange
     {
         public DateOnly Date { get; set; }
         public DateOnly EndDate { get; set; }

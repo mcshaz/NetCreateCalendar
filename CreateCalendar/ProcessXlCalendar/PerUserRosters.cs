@@ -1,17 +1,20 @@
-﻿using CreateCalendar.DataTransfer;
+﻿using CreateCalendar.CustomSettings;
+using CreateCalendar.DataTransfer;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CreateCalendar.ProcessXlCalendar
 {
-    internal static class PerUserRosters
+    public static class PerUserRosters
     {
-        public static IEnumerable<PerUserRoster> Create(EveryoneRoster everyoneRoster)
+        public static IEnumerable<PerUserRoster> Create(EveryoneRoster everyoneRoster, IExcelFileSettings settings)
         {
-            foreach(var d in everyoneRoster.DailyRoster)
+            var nonAvailableShifts = new HashSet<string>(
+                settings.NonAvailableShifts,
+                StringComparer.OrdinalIgnoreCase
+            );
+            foreach (var d in everyoneRoster.DailyRoster)
             {
                 d.Shifts = d.Shifts.OrderBy(s => s.ShiftName).ToList();
             }
@@ -24,10 +27,12 @@ namespace CreateCalendar.ProcessXlCalendar
                         where eShift != default
                         select new PerUserRosterDay
                         {
-                            Date = d.Date, 
-                            Shift = eShift.ShiftName, 
-                            OtherEmployeesAvailable = d.Shifts.Where(s => s != eShift 
-                                    && !string.Equals(s.ShiftName, "leave", StringComparison.OrdinalIgnoreCase))
+                            Date = d.Date,
+                            DateComment = d.DateComment,
+                            Shift = eShift.ShiftName,
+                            OtherEmployeesAvailable = nonAvailableShifts.Contains(eShift.ShiftName)
+                                ? Enumerable.Empty<EmployeeShift>()
+                                : d.Shifts.Where(s => s != eShift && !nonAvailableShifts.Contains(s.ShiftName))
                         }).ToList()
             }).ToList();
         }

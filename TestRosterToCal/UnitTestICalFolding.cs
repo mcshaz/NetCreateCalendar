@@ -9,7 +9,7 @@ namespace TestRosterToCal
     [TestClass]
     public class UnitTestICalFolding : IDisposable
     {
-        private MemoryStream ms;
+        private readonly MemoryStream ms;
         private bool disposedValue;
 
         public UnitTestICalFolding() { 

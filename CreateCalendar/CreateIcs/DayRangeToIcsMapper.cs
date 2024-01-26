@@ -1,7 +1,7 @@
-﻿using CreateCalendar.DataTransfer;
+﻿using CreateCalendar.CustomSettings;
+using CreateCalendar.DataTransfer;
 using System;
-using System.Collections.Generic;
-using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace CreateCalendar.CreateIcs
@@ -9,53 +9,84 @@ namespace CreateCalendar.CreateIcs
     internal class DayRangeToIcsMapper
     {
         private readonly CalendarWriter _writer;
-        private readonly DateTime _dateStamp;
-        public DayRangeToIcsMapper(Stream stream) { 
-            _writer = new CalendarWriter(stream);
-            _dateStamp = DateTime.UtcNow;
-            Ids = new List<string>();
+        private readonly DateTime _instantiatedUtc;
+        private readonly IEventSettings _eventSettings;
+        public DayRangeToIcsMapper(CalendarWriter writer, IEventSettings eventSettings) {
+            _writer = writer;
+            _instantiatedUtc = DateTime.UtcNow;
+            _eventSettings = eventSettings;
         }
-        public IList<string> Ids { get; private set; }
         public async Task MapRange(PerUserRosterDayRange dayRange)
         {
             await _writer.WriteLineRaw("BEGIN:VEVENT");
-            await _writer.WriteProperty("DTSTAMP", _dateStamp);
             await _writer.WriteProperty("UID", dayRange.UId);
+            await _writer.WriteProperty("DTSTAMP", _instantiatedUtc);
+            await _writer.WriteProperty("SEQUENCE", dayRange.Sequence);
+            await _writer.WriteProperty("CREATED", dayRange.Created == default
+                ? _instantiatedUtc
+                : dayRange.Created);
             await _writer.WriteProperty("DTSTART", dayRange.Date);
             // note calendar spec is EXCLUSIVE of the end date
             if (dayRange.Date != dayRange.EndDate)
                 await _writer.WriteProperty("DTEND", dayRange.EndDate.AddDays(1));
-            await _writer.WriteProperty("SUMMARY", dayRange.Shift);
-            await _writer.WriteLineRaw("LOCATION:SCUH");
-            await _writer.WriteProperty("DESCRIPTION", cf => GetDescription(cf, dayRange.Others));
+            await _writer.WriteProperty("SUMMARY", string.Format(_eventSettings.FormatShift, dayRange.Shift));
+            if (dayRange.Others.Any() || dayRange.DateRangeComments.Any())
+                await _writer.WriteProperty("DESCRIPTION", cf => GetDescription(cf, dayRange));
+            foreach (var kv in _eventSettings.AppointmentKeyValues)
+            {
+                await _writer.WriteProperty(kv.Key, kv.Value);
+            }
             await _writer.WriteLineRaw("END:VEVENT");
-            _writer.Flush();
         }
 
-        private static void GetDescription(ContentFolder cf, IList<OthersDay> othersDays)
+        private static void GetDescription(ContentFolder cf, PerUserRosterDayRange dr)
         {
-            if (othersDays.Count == 1)
+            foreach (var d in dr.DateRangeComments)
             {
-                foreach (var e in othersDays[0].OtherEmployeesAvailable)
-                    cf.WriteLine(e.ShiftName, " - ", e.EmployeeName);
+                if (WriteDateRange(cf, dr, d))
+                {
+                    cf.WriteLine(" - ", d.DateComment);
+                }
+                else
+                {
+                    cf.WriteLine(d.DateComment);
+                }
+            }
+            if (dr.DateRangeComments.Any()) 
+                cf.WriteLine();
+            foreach (var o in dr.Others)
+            {
+                string prepend;
+                if (WriteDateRange(cf, dr, o))
+                {
+                    cf.WriteLine();
+                    prepend = "\t";
+                }
+                else
+                {
+                    prepend = string.Empty;
+                }
+                foreach (var e in o.OtherEmployeesAvailable)
+                {
+                    cf.WriteLine(prepend, e.ShiftName, " - ", e.EmployeeName);
+                }
+            }
+        }
+
+        private static bool WriteDateRange(ContentFolder cf, IDateOnlyRange parent, IDateOnlyRange child)
+        {
+            if (parent.Date == child.Date && parent.EndDate == child.EndDate)
+                return false;
+            const string dateFormat = "ddd MMM d";
+            if (child.Date == child.EndDate)
+            {
+                cf.Write(child.Date.ToString(dateFormat));
             }
             else
             {
-                foreach (var od in othersDays)
-                {
-                    const string dateFormat = "ddd mmm d";
-                    if (od.Date == od.EndDate)
-                    {
-                        cf.WriteLine(od.Date.ToString(dateFormat));
-                    }
-                    else
-                    {
-                        cf.WriteLine(od.Date.ToString(dateFormat), " - ", od.EndDate.ToString(dateFormat));
-                    }
-                    foreach (var e in othersDays[0].OtherEmployeesAvailable)
-                        cf.WriteLine("\t", e.ShiftName, " - ", e.EmployeeName);
-                }
+                cf.Write(child.Date.ToString(dateFormat), " - ", child.EndDate.ToString(dateFormat));
             }
+            return true;
         }
     }
 }

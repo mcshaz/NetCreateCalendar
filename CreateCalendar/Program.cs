@@ -1,64 +1,122 @@
-﻿using CreateCalendar.ProcessXlCalendar;
-using Microsoft.SharePoint.Client;
+﻿using AngleSharp.Common;
+using CreateCalendar.CustomSettings;
+using CreateCalendar.DataTransfer;
+using CreateCalendar.GoogleDrive;
+using CreateCalendar.ProcessXlCalendar;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using PnP.Core.Services;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Security;
 using System.Threading.Tasks;
 
 namespace CreateCalendar
 {
     internal class Program
     {
-        static async Task Main(string[] args)
+        static async Task Main()
         {
-            const string defaultUser = "brent.mcsharry@health.qld.gov.au";
-            Console.WriteLine($"Username ([enter] for ${defaultUser}):");
-            var userName = Console.ReadLine();
-            if (string.IsNullOrEmpty( userName ) ) { userName = defaultUser; }
-            Console.WriteLine($"Password for {userName}:");
-            // var pwd = GetSecureString();
-            var pwd = new SecureString();
-            foreach (var c in "Galaxy13!") pwd.AppendChar( c );
-            using (var ctx = new ClientContext("https://healthqld.sharepoint.com/teams/ICUPCCULeave/Shared%20Documents/Forms"))
+            Console.WriteLine("Initialising...");
+            using (var host = Startup.HostBuilder())
             {
-                ctx.Credentials = new SharePointOnlineCredentials(userName, pwd);
-                var file = ctx.Web.GetFileByServerRelativeUrl("teams/ICUPCCULeave/Shared%20Documents/PCCU%20SMO/PCCU%20SMO%20Roster.xlsx");
-                ClientResult<Stream> data = file.OpenBinaryStream();
-                ctx.Load(file);
-                await ctx.ExecuteQueryAsync();
-
-                var roster = ReadXlData.Process(data.Value);
-                Console.WriteLine(roster.Employees.First());
-            }
-            Console.ReadLine();
-        }
-
-        static SecureString GetSecureString()
-        {
-            ConsoleKeyInfo info;
-
-            var returnVar = new SecureString();
-            do
-            {
-                info = Console.ReadKey(true);
-                if (info.Key == ConsoleKey.Backspace)
+                await host.StartAsync();
+                Console.WriteLine("Logging in (directing to a browser)...");
+                using (var scope = host.Services.CreateScope())
                 {
-                    if (returnVar.Length > 0)
+                    var appOpts = scope.ServiceProvider.GetRequiredService<IOptions<List<CreateCalendarFileSettings>>>();
+                    // Obtain a PnP Context factory
+                    var pnpContextFactory = scope.ServiceProvider.GetRequiredService<IPnPContextFactory>();
+                    // Use the PnP Context factory to get a PnPContext for the given configuration
+                    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+                    var opts = scope.ServiceProvider.GetRequiredService<IOptions<CreateCalendarSettings>>().Value;
+
+                    var calData = new List<ProcessedXlFileDetails>();
+                    using (var context = await pnpContextFactory.CreateAsync("SiteToWorkWith"))
                     {
-                        returnVar.RemoveAt(returnVar.Length - 1);
-                        Console.Write('\b');
+                        foreach (var opt in opts.Calendars)
+                        {
+                            var file = await context.Web.GetFileByServerRelativeUrlAsync(opt.ExcelRoster.Url);
+
+                            var path = file.ServerRelativeUrl.Split('/');
+                            var xlRosterFilename = path.Last();
+                            xlRosterFilename = xlRosterFilename.Substring(0, xlRosterFilename.LastIndexOf('.'));
+
+                            FileStream localStream = null;
+                            string tfn = null;
+                            try
+                            {
+                                using (var spf = await file.GetContentAsync(true))
+                                {
+                                    logger.LogTrace("stream downloaded");
+                                    tfn = Path.GetTempFileName();
+                                    localStream = File.Open(tfn, FileMode.Open);
+                                    spf.CopyTo(localStream);
+                                }
+
+                                var dataReaderLogger = scope.ServiceProvider.GetRequiredService<ILogger<XlDataReader>>();
+
+                                var xlDataReader = new XlDataReader(
+                                    dataReaderLogger,
+                                    opt.ExcelRoster
+                                );
+
+                                calData.Add(new ProcessedXlFileDetails {
+                                    Settings = opt,
+                                    Roster = xlDataReader.Process(localStream),
+                                    UniqueId = file.UniqueId
+                                });
+
+                            }
+                            finally
+                            {
+                                localStream?.Dispose();
+                                if (tfn != null)
+                                    File.Delete(tfn);
+                            }       
+                        }
+                    }
+                    using (var googleDrive = await GoogleDriveIcsFiles.Create(opts.GoogleUser))
+                    {
+                        foreach (var processedData in calData)
+                        {
+                            googleDrive.WorkingFolderId = await googleDrive.GetFolderId(processedData.Settings.IcsFolder);
+                            var allFiles = (await googleDrive.ListFiles()).ToDictionary(f => f.Name);
+                            await ProcessAndOutput.ProcessCalendar(
+                                processedData.UniqueId,
+                                PerUserRosters.Create(processedData.Roster, processedData.Settings.ExcelRoster),
+                                processedData.Settings,
+                                async fileName => 
+                                {
+                                    if (allFiles.TryGetValue(fileName, out Google.Apis.Drive.v3.Data.File f))
+                                    {
+                                        var ms = new MemoryStream((int)f.Size);
+                                        await googleDrive.WriteToStream(f.Id, ms);
+                                        return ms;
+                                    }
+                                    return null;
+                                },
+                                async (fileName, stream) =>
+                                {
+                                    Uri findFile;
+                                    if (allFiles.TryGetValue(fileName, out Google.Apis.Drive.v3.Data.File f))
+                                    {
+                                        findFile = await googleDrive.UpdateFile(f, stream);
+                                    }
+                                    else {
+                                        findFile =await googleDrive.CreateFile(fileName, stream);
+                                    }
+                                    Console.WriteLine($"{fileName} {findFile}");
+                                }
+                            );
+                        }
                     }
                 }
-                else if (info.Key != ConsoleKey.Enter)
-                {
-                    Console.Write('*');
-                    returnVar.AppendChar(info.KeyChar);
-                }
-            } while (info.Key != ConsoleKey.Enter);
-            Console.WriteLine();
-            returnVar.MakeReadOnly();
-            return returnVar;
+            }
+            Console.WriteLine("Complete - press [enter] to close");
+            Console.ReadLine();
         }
     }
 }

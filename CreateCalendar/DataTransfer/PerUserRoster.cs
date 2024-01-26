@@ -2,7 +2,7 @@
 
 namespace CreateCalendar.DataTransfer
 {
-    internal class PerUserRoster
+    public class PerUserRoster
     {
         public string EmployeeName { get; set; }
         public IEnumerable<PerUserRosterDay> Days { get; set; }

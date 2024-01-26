@@ -1,18 +1,28 @@
 ﻿using ClosedXML.Excel;
+using CreateCalendar.CustomSettings;
 using CreateCalendar.DataTransfer;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 
 namespace CreateCalendar.ProcessXlCalendar
 {
-    public static class ReadXlData
+    public class XlDataReader
     {
-        public static EveryoneRoster Process(Stream fileStream)
+        private readonly ILogger _logger;
+        private readonly IExcelFileSettings _excelFileSettings;
+        public XlDataReader(ILogger<XlDataReader> logger, IExcelFileSettings excelFileSettings)
         {
-            using (var excelWorkbook = new XLWorkbook(fileStream))
+            _logger = logger;
+            _excelFileSettings = excelFileSettings;
+        }
+        public EveryoneRoster Process(Stream xlStream)
+        {
+            using (var excelWorkbook = new XLWorkbook(xlStream))
             {
                 var employees = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var dateShifts = new List<ExcelCalDataRow>();
@@ -21,8 +31,12 @@ namespace CreateCalendar.ProcessXlCalendar
                             where int.TryParse(ws.Name, out int wsName) && wsName >= currentYear
                             orderby ws.Name
                             select ws;
+                var timer = new Stopwatch();
                 foreach (var ws in allWs)
                 {
+                    timer.Start();
+                    _logger.LogDebug($"enumerating rows of {ws.Name}");
+                    int rows = 0;
                     HeaderMapper headerMapper = null;
                     using (var rowsEnumerator = ws.RowsUsed().GetEnumerator())
                     {
@@ -31,10 +45,10 @@ namespace CreateCalendar.ProcessXlCalendar
                             var dataRow = rowsEnumerator.Current;
                             if (headerMapper == null)
                             {
-                                foreach (var cell in dataRow.CellsUsed().Skip(1))
+                                foreach (var cell in dataRow.CellsUsed().SkipWhile(c => c.Address.ColumnNumber <= _excelFileSettings.DateCol))
                                 {
                                     if (cell.CachedValue.TryGetText(out var txt)
-                                        && txt.IndexOf("Roster", StringComparison.OrdinalIgnoreCase) > -1)
+                                        && txt.IndexOf(_excelFileSettings.EmployeeNamesBeneath, StringComparison.OrdinalIgnoreCase) > -1)
                                     {
                                         var borderedCells = FindMergedBoundaries(cell) ?? FindBorders(cell);
                                         if (!borderedCells.IsBordered || !rowsEnumerator.MoveNext())
@@ -43,16 +57,16 @@ namespace CreateCalendar.ProcessXlCalendar
                                         }
                                         dataRow = rowsEnumerator.Current;
                                         var cellsBetween = dataRow.Cells(borderedCells.LeftBorderedCol, borderedCells.RightBorderedCol);
-                                        IEnumerable<IXLCell> specialShifts = null;
+                                        var specialShifts = new List<IXLCell>();
                                         foreach (var c in borderedCells.CellsRight(dataRow))
                                         {
-                                            if (c.TryGetValue(out string v) && v.StartsWith("2nd"))
+                                            if (c.TryGetValue(out string v) 
+                                                    && _excelFileSettings.SpecialShiftHeaders.Any(ss => v.Contains(ss)))
                                             {
-                                                specialShifts = new[] { c };
-                                                break;
+                                                specialShifts.Add(c);
                                             }
                                         }
-                                        headerMapper = new HeaderMapper(cellsBetween, specialShifts);
+                                        headerMapper = new HeaderMapper(cellsBetween, specialShifts, _excelFileSettings);
                                         break;
                                     }
                                 }
@@ -61,8 +75,12 @@ namespace CreateCalendar.ProcessXlCalendar
                             {
                                 headerMapper.AddRow(dataRow);
                             }
+                            ++rows;
                         }
                     }
+                    timer.Stop();
+                    _logger.LogDebug($"examined {rows} in {timer.ElapsedMilliseconds} ms = {timer.Elapsed.TotalMilliseconds/rows} ms/row");
+                    timer.Reset();
                     if (headerMapper != null)
                     {
                         dateShifts.AddRange(headerMapper.Roster);
@@ -106,8 +124,8 @@ namespace CreateCalendar.ProcessXlCalendar
             if (leftBorderedCell.Style.Border.LeftBorder != XLBorderStyleValues.None)
                 returnVar.LeftBorderedCol = leftBorderedCell.Address.ColumnNumber;
 
-            var maxRows = cell.WorksheetRow().LastCellUsed().Address.ColumnNumber;
-            while (rightBorderedCell.Address.ColumnNumber < maxRows
+            var maxCols = cell.WorksheetRow().LastCellUsed().Address.ColumnNumber;
+            while (rightBorderedCell.Address.ColumnNumber < maxCols
                 && rightBorderedCell.Style.Border.RightBorder == XLBorderStyleValues.None)
             {
                 rightBorderedCell = rightBorderedCell.CellRight();
@@ -131,7 +149,12 @@ namespace CreateCalendar.ProcessXlCalendar
             return (!IsBordered || lastColUsed <= RightBorderedCol)
                 ? Enumerable.Empty<IXLCell>()
                 : row.Cells(RightBorderedCol, lastColUsed);
-
+        }
+        public IEnumerable<IXLCell> CellsLeft(IXLRow row)
+        {
+            return (!IsBordered)
+                ? Enumerable.Empty<IXLCell>()
+                : row.Cells(1, LeftBorderedCol);
         }
     }
 }
