@@ -1,80 +1,95 @@
-﻿using ClosedXML.Excel;
-using CreateCalendar.CustomSettings;
+﻿using CreateCalendar.CustomSettings;
 using CreateCalendar.DataTransfer;
+using CreateCalendar.Utilities;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Spreadsheet;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace CreateCalendar.ProcessXlCalendar
 {
     public class XlDataReader
     {
-        private readonly ILogger _logger;
+        // private readonly ILogger _logger;
         private readonly IExcelFileSettings _excelFileSettings;
-        public XlDataReader(ILogger<XlDataReader> logger, IExcelFileSettings excelFileSettings)
+        public XlDataReader(IExcelFileSettings excelFileSettings /*ILogger<XlDataReader> logger */)
         {
-            _logger = logger;
             _excelFileSettings = excelFileSettings;
+            _sheetselector = new Regex(excelFileSettings.SheetnamePattern);
         }
+
+        private static string[] GetIdToStringMapper(SpreadsheetDocument doc)
+        {
+            SharedStringTablePart shareStringPart = doc.WorkbookPart.GetPartsOfType<SharedStringTablePart>().First();
+            return shareStringPart.SharedStringTable.Elements<SharedStringItem>()
+                .Select(i => i.InnerText).ToArray();
+        }
+        private readonly Regex _sheetselector;
         public EveryoneRoster Process(Stream xlStream)
         {
-            const int abortAfterEmptyRows = 10;
-            using (var excelWorkbook = new XLWorkbook(xlStream))
+            using (var excelWorkbook = SpreadsheetDocument.Open(xlStream, false))
             {
                 var employees = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var dateShifts = new List<ExcelCalDataRow>();
-                var currentYear = DateTime.Today.Year;
-                var allWs = from ws in excelWorkbook.Worksheets
-                            where int.TryParse(ws.Name, out int wsName) && wsName >= currentYear
-                            orderby ws.Name
-                            select ws;
-                var timer = new Stopwatch();
+                var wbPart = excelWorkbook.WorkbookPart;
+                var borderFinder = new BorderFinder(wbPart);
+                var stringMapper = GetIdToStringMapper(excelWorkbook);
+                var allWs =  (from s in wbPart.Workbook.Descendants<Sheet>()
+                              where _sheetselector.IsMatch(s.Name)
+                              orderby s.Name
+                              select ((WorksheetPart)wbPart.GetPartById(s.Id)).Worksheet);
                 foreach (var ws in allWs)
                 {
-                    int emptyRows = 0;
                     HeaderMapper headerMapper = null;
-                    using (var rowsEnumerator = ws.RowsUsed().GetEnumerator())
+                    var mergeFinder = new MergedRangeFinder(ws);
+                    using (var rowsEnumerator = ws.GetFirstChild<SheetData>().Elements<Row>().GetEnumerator())
                     {
-                        while (rowsEnumerator.MoveNext() && emptyRows < abortAfterEmptyRows)
+                        while (rowsEnumerator.MoveNext())
                         {
                             var dataRow = rowsEnumerator.Current;
                             if (headerMapper == null)
                             {
-                                foreach (var cell in dataRow.CellsUsed().SkipWhile(c => c.Address.ColumnNumber <= _excelFileSettings.DateCol))
+                                foreach (var cell in dataRow.Elements<Cell>())
                                 {
-                                    if (cell.CachedValue.TryGetText(out var txt)
-                                        && txt.IndexOf(_excelFileSettings.EmployeeNamesBeneath, StringComparison.OrdinalIgnoreCase) > -1)
-                                    {
-                                        var borderedCells = FindMergedBoundaries(cell) ?? FindBorders(cell);
-                                        if (!borderedCells.IsBordered || !rowsEnumerator.MoveNext())
+                                    if (ColLetterComparer.Instance.Compare(cell.ColumnReference(), _excelFileSettings.DateCol) > 0)
+                                    { 
+                                        if (cell.TryGetString(stringMapper, out string cellTxt))
                                         {
-                                            throw new Exception("Cannot Identify borders defining Employee Names");
-                                        }
-                                        dataRow = rowsEnumerator.Current;
-                                        var cellsBetween = dataRow.Cells(borderedCells.LeftBorderedCol, borderedCells.RightBorderedCol);
-                                        var specialShifts = new List<IXLCell>();
-                                        foreach (var c in borderedCells.CellsRight(dataRow))
-                                        {
-                                            if (c.TryGetValue(out string v) 
-                                                    && _excelFileSettings.SpecialShiftHeaders.Any(ss => v.Contains(ss)))
+                                            if (cellTxt.IndexOf(_excelFileSettings.EmployeeNamesBeneath, StringComparison.OrdinalIgnoreCase) > -1)
                                             {
-                                                specialShifts.Add(c);
+                                                var borderedCols = mergeFinder.IncludesCell(cell) ?? borderFinder.FindBorders(cell);
+                                                if (!borderedCols.HasValue || !rowsEnumerator.MoveNext())
+                                                {
+                                                    throw new Exception("Cannot Identify borders defining Employee Names");
+                                                }
+                                                dataRow = rowsEnumerator.Current;
+                                                var cellsBetween = borderedCols.Value.ApplyToRow(dataRow);
+                                                var specialShifts = new List<Cell>();
+                                                foreach (var c in borderedCols.Value.CellsRight(dataRow))
+                                                {
+                                                    if (c.TryGetString(stringMapper, out string txt))
+                                                    {
+                                                        if (_excelFileSettings.SpecialShiftHeaders.Contains(txt))
+                                                        {
+                                                            specialShifts.Add(c);
+                                                        }
+                                                    }
+                                                }
+                                                headerMapper = new HeaderMapper(cellsBetween, specialShifts, stringMapper, _excelFileSettings);
+                                                break;
                                             }
                                         }
-                                        headerMapper = new HeaderMapper(cellsBetween, specialShifts, _excelFileSettings);
-                                        break;
                                     }
                                 }
                             }
                             else
                             {
-                                emptyRows = headerMapper.AddRow(dataRow)
-                                    ? 0
-                                    : emptyRows + 1;
+                                headerMapper.AddRow(dataRow);
                             }
                         }
                     }
@@ -85,73 +100,13 @@ namespace CreateCalendar.ProcessXlCalendar
                             employees.Add(e);
                     }
                 }
+                dateShifts.Sort((a, b) => a.Date.CompareTo(b.Date));
                 return new EveryoneRoster
                 {
                     DailyRoster = dateShifts,
                     Employees = employees
                 };
             }
-        }
-
-        private static BorderedRange FindMergedBoundaries(IXLCell cell)
-        {
-            var mergedIncludingCell = cell.Worksheet.MergedRanges
-                .FirstOrDefault(c => c.RangeAddress.Contains(cell.Address));
-            if (mergedIncludingCell != default)
-            {
-                return new BorderedRange
-                {
-                    LeftBorderedCol = mergedIncludingCell.FirstColumn().ColumnNumber(),
-                    RightBorderedCol = mergedIncludingCell.LastColumn().ColumnNumber()
-                };
-            }
-            return null;
-        }
-        private static BorderedRange FindBorders(IXLCell cell)
-        {
-            IXLCell leftBorderedCell;
-            var rightBorderedCell = leftBorderedCell = cell;
-            var returnVar = new BorderedRange();
-
-            while (leftBorderedCell.Address.ColumnNumber >= 1
-                && leftBorderedCell.Style.Border.LeftBorder == XLBorderStyleValues.None)
-            {
-                leftBorderedCell = leftBorderedCell.CellLeft();
-            }
-            if (leftBorderedCell.Style.Border.LeftBorder != XLBorderStyleValues.None)
-                returnVar.LeftBorderedCol = leftBorderedCell.Address.ColumnNumber;
-
-            var maxCols = cell.WorksheetRow().LastCellUsed().Address.ColumnNumber;
-            while (rightBorderedCell.Address.ColumnNumber < maxCols
-                && rightBorderedCell.Style.Border.RightBorder == XLBorderStyleValues.None)
-            {
-                rightBorderedCell = rightBorderedCell.CellRight();
-            }
-            if (rightBorderedCell.Style.Border.RightBorder != XLBorderStyleValues.None)
-                returnVar.RightBorderedCol = rightBorderedCell.Address.ColumnNumber;
-
-            return returnVar;
-        }
-
-
-    }
-    internal class BorderedRange
-    {
-        public int LeftBorderedCol { get; set; } = -1;
-        public int RightBorderedCol { get; set; } = -1;
-        public bool IsBordered { get => (LeftBorderedCol | RightBorderedCol) != -1; }
-        public IEnumerable<IXLCell> CellsRight(IXLRow row)
-        {
-            var lastColUsed = row.LastCellUsed().Address.ColumnNumber;
-            return (!IsBordered || lastColUsed <= RightBorderedCol)
-                ? Enumerable.Empty<IXLCell>()
-                : row.Cells(RightBorderedCol, lastColUsed);
-        }
-        public IEnumerable<IXLCell> CellsLeft(IXLRow row)
-        {
-            return (!IsBordered)
-                ? Enumerable.Empty<IXLCell>()
-                : row.Cells(1, LeftBorderedCol);
         }
     }
 }

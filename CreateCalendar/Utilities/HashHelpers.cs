@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.IO.Hashing;
-using System.Net.Http;
+﻿using System.IO.Hashing;
 
 namespace CreateCalendar.Utilities
 {
@@ -49,7 +45,7 @@ namespace CreateCalendar.Utilities
                         break;
                 }
             }
-            return byteList.ToArray();
+            return [.. byteList];
         }
         /*
         public static byte[] SequentialHashCodes(params object[] objs)

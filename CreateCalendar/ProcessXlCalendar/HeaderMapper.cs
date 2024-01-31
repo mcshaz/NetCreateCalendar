@@ -1,102 +1,159 @@
-﻿using ClosedXML.Excel;
-using CreateCalendar.CustomSettings;
+﻿using CreateCalendar.CustomSettings;
 using CreateCalendar.DataTransfer;
-using Microsoft.Extensions.Options;
+using CreateCalendar.Utilities;
+using DocumentFormat.OpenXml.Spreadsheet;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace CreateCalendar.ProcessXlCalendar
 {
     internal class HeaderMapper
     {
-        private readonly IEnumerable<KeyValuePair<int, string>> _colToEmployeeName;
-        private readonly IEnumerable<KeyValuePair<int, string>> _colToSpecialShift;
-        private readonly int _dateCol;
-        private readonly int _dateCommentCol;
-        public IEnumerable<string> AllEmployees => _colToEmployeeName.Select(kv => kv.Value);
+        private readonly Dictionary<string, ColDetails> _colMapper;
+        private readonly string[] _stringMapper;
+        private readonly string _dateCol;
+        private readonly string _maxCol;
+        private static readonly Regex _beforeAfterBrcketMatcher = new Regex(@"^([^(]+)(\([^)]+\))?$");
+        public IEnumerable<string> AllEmployees => (from cd in _colMapper.Values
+                                                    where cd.ColType == ColType.ForEmployee
+                                                    select cd.ColHeader);
         public List<ExcelCalDataRow> Roster { get; }
         public readonly HashSet<string> _ignoreShifts;
  
-        public HeaderMapper(IEnumerable<IXLCell> employeeCells, IEnumerable<IXLCell> specialShifts, IExcelFileSettings settings)
+        public HeaderMapper(IEnumerable<Cell> employeeHeaders, IEnumerable<Cell> shiftsHeaders, string[] stringMapper,IExcelFileSettings settings)
         {
             _ignoreShifts = new HashSet<string>(
-                settings.IgnoreShifts, 
+                settings.IgnoreShifts,
                 StringComparer.OrdinalIgnoreCase
-            );
+            )
+            {
+                string.Empty
+            };
             _dateCol = settings.DateCol;
-            _dateCommentCol = settings.DateCommentsCol ?? -1;
-            Roster = new List<ExcelCalDataRow>();
-            var colToEmployeeName = new List<KeyValuePair<int, string>>(employeeCells.Count());
-            foreach (var cell in employeeCells)
+            _colMapper = new Dictionary<string, ColDetails>();
+
+            if (!string.IsNullOrEmpty(settings.DateCommentsCol))
             {
-                if (cell.TryGetValue(out string name))
+                _colMapper.Add(settings.DateCommentsCol, new ColDetails
                 {
-                    colToEmployeeName.Add(new KeyValuePair<int, string>(cell.Address.ColumnNumber, name.Trim()));
-                }
+                    ColType = ColType.DateComment
+                }); ;
             }
-            _colToEmployeeName = colToEmployeeName;
-            if (specialShifts == null)
+            if (employeeHeaders != null)
             {
-                _colToSpecialShift = Enumerable.Empty<KeyValuePair<int, string>>();
-            }
-            else 
-            {
-                var colToSpecialShift = new List<KeyValuePair<int, string>>(specialShifts.Count());
-                foreach (var cell in specialShifts)
+                foreach (var e in employeeHeaders)
                 {
-                    if (cell.TryGetValue(out string name))
+                    if (e.TryGetString(stringMapper, out string txt))
                     {
-                        colToSpecialShift.Add(new KeyValuePair<int, string>(cell.Address.ColumnNumber, name.Trim()));
+                        _colMapper.Add(e.ColumnReference(), new ColDetails
+                        {
+                            ColType = ColType.ForEmployee,
+                            ColHeader = txt
+                        });
                     }
                 }
-                _colToSpecialShift = colToSpecialShift;
             }
+            if (shiftsHeaders != null)
+            {
+                foreach (var s in shiftsHeaders)
+                {
+                    if (s.TryGetString(stringMapper, out string txt))
+                    {
+                        _colMapper.Add(s.ColumnReference(), new ColDetails
+                        {
+                            ColType = ColType.ForShifts,
+                            ColHeader = txt
+                        });
+                    }
+                }
+            }
+            _maxCol = _colMapper.Keys.MaxBy(ColLetterComparer.Instance);
+            Roster = new List<ExcelCalDataRow>();
+            _stringMapper = stringMapper;
         }
         /// <summary>
         /// 
         /// </summary>
         /// <param name="row"></param>
         /// <returns>true if a date was found and the row was added</returns>
-        public bool AddRow(IXLRow row)
+        public bool AddRow(Row row)
         {
-            if (!row.Cell(_dateCol).TryGetValue(out DateTime dt))
+            ExcelCalDataRow newCalDataRow = null;
+            var cellEnumerator = row.ChildElements.OfType<Cell>().GetEnumerator();
+            while (cellEnumerator.MoveNext())
             {
-                return false;
-            }
-            var newCalDataRow = new ExcelCalDataRow
-            {
-                Date = DateOnly.FromDateTime(dt),
-                Shifts = new List<EmployeeShift>()
-            };
-            if (row.Cell(_dateCommentCol).TryGetValue(out string commentVal) && !string.IsNullOrWhiteSpace(commentVal))
-            {
-                newCalDataRow.DateComment = commentVal.Trim();
-            }
-            foreach (var kv in _colToEmployeeName)
-            {
-                if (row.Cell(kv.Key).TryGetValue(out string shiftName) && !string.IsNullOrWhiteSpace(shiftName))
+                string currentCol = cellEnumerator.Current.ColumnReference();
+                var compare = ColLetterComparer.Instance.Compare(currentCol, _dateCol);
+                if (compare == 0)
                 {
-                    shiftName = shiftName.Trim();
-                    if (!_ignoreShifts.Contains(shiftName))
+                    if (cellEnumerator.Current.TryGetDateOnly(out DateOnly dt))
                     {
-                        newCalDataRow.Shifts.Add(new EmployeeShift
+                        newCalDataRow = new ExcelCalDataRow
                         {
-                            ShiftName = shiftName.Trim(),
-                            EmployeeName = kv.Value
-                        });
+                            Date = dt,
+                            Shifts = new List<EmployeeShift>()
+                        };
+                        break;
+                    }
+                    else
+                    {
+                        return false;
                     }
                 }
-            }
-            foreach (var kv in _colToSpecialShift)
-            {
-                if (row.Cell(kv.Key).TryGetValue(out string personDoingShift) && !string.IsNullOrWhiteSpace(personDoingShift))
+                else if (compare > 0)
                 {
-                    newCalDataRow.Shifts.Add(new EmployeeShift
+                    return false;
+                }
+            }
+            while (cellEnumerator.MoveNext())
+            {
+                string currentCol = cellEnumerator.Current.ColumnReference();
+                var compare = ColLetterComparer.Instance.Compare(currentCol, _maxCol);
+                if (compare > 0)
+                {
+                    break;
+                }
+                if (cellEnumerator.Current.TryGetString(_stringMapper, out string str))
+                {
+                    str = str.Trim();
+                    if (!_ignoreShifts.Contains(str) && _colMapper.TryGetValue(currentCol, out ColDetails cd))
                     {
-                        ShiftName = kv.Value,
-                        EmployeeName = personDoingShift.Trim()
-                    });
+                        switch (cd.ColType)
+                        {
+                            case ColType.DateComment:
+                                newCalDataRow.DateComment = str;
+                                break;
+                            case ColType.ForShifts:
+                                // hack here - needs to go in some kind of appsettings property
+                                var inBrackets = _beforeAfterBrcketMatcher.Match(str);
+                                if (inBrackets.Groups.Count > 2)
+                                {
+                                    newCalDataRow.Shifts.Add(new EmployeeShift
+                                    {
+                                        ShiftName = cd.ColHeader + inBrackets.Groups[2].Value,
+                                        EmployeeName = inBrackets.Groups[1].Value.Trim(),
+                                    });
+                                }
+                                else
+                                {
+                                    newCalDataRow.Shifts.Add(new EmployeeShift
+                                    {
+                                        ShiftName = cd.ColHeader,
+                                        EmployeeName = str
+                                    });
+                                }
+                                break;
+                            case ColType.ForEmployee:
+                                newCalDataRow.Shifts.Add(new EmployeeShift
+                                {
+                                    ShiftName = str,
+                                    EmployeeName = cd.ColHeader
+                                });
+                                break;
+                        }
+                    }
                 }
             }
             Roster.Add(newCalDataRow);

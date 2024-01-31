@@ -19,7 +19,7 @@ namespace CreateCalendar
             Guid rosterId,
             IEnumerable<PerUserRoster> employeesRosters,
             IEventSettings eventSettings,
-            Func<string, Task<Stream>> getExistingIcs, 
+            Func<string, Task<Stream?>> getExistingIcs, 
             Func<string, MemoryStream, Task> writeIcs)
         {
             foreach (var pr in employeesRosters)
@@ -39,21 +39,19 @@ namespace CreateCalendar
                             existingAppts = await ExtractCalDetails.Extract(sr);
                         }
                 }
-                using (var ms = new MemoryStream())
-                {
-                    var cw = new CalendarWriter(ms);
-                    if (existingAppts.Any())
-                        await ConglomerateExisting.Conglomerate(existingAppts, coalesced, cw, eventSettings.OldAppointments);
+                using var ms = new MemoryStream();
+                var cw = new CalendarWriter(ms);
+                if (existingAppts.Any())
+                    await ConglomerateExisting.Conglomerate(existingAppts, coalesced, cw, eventSettings.OldAppointments);
 
-                    var drw = new DayRangeToIcsMapper(cw, eventSettings);
-                    foreach (var c in coalesced)
-                    {
-                        await drw.MapRange(c);
-                    }
-                    await cw.WriteEnd();
-                    ms.Position = 0;
-                    await writeIcs(fileName, ms);
+                var drw = new DayRangeToIcsMapper(cw, eventSettings);
+                foreach (var c in coalesced)
+                {
+                    await drw.MapRange(c);
                 }
+                await cw.WriteEnd();
+                ms.Position = 0;
+                await writeIcs(fileName, ms);
             }
         }
     }

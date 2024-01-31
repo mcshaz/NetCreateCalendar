@@ -2,9 +2,9 @@
 
 namespace CreateCalendar.CustomSettings
 {
-    internal class CreateCalendarSettings
+    public class CreateCalendarSettings
     {
         public string GoogleUser { get; set; }
-        public IList<CreateCalendarFileSettings> Calendars { get; set; }
+        public List<CreateCalendarFileSettings> Calendars { get; set; } = [];
     }
 }

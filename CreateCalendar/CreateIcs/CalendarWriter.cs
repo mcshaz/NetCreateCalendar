@@ -53,7 +53,6 @@ namespace CreateCalendar.CreateIcs
         {
             await WriteLineRaw(propertyName, ":", propertyValue);
         }
-
         public async Task WriteProperty(string propertyName, Action<ContentFolder> textValue)
         {
             var cf = new ContentFolder(_stream, propertyName, Encoding);

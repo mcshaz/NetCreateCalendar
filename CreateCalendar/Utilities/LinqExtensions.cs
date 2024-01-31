@@ -1,48 +1,38 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace CreateCalendar
 {
     internal static class LinqExtensions
     {
-        public static IEnumerable<T> Append<T>(this IEnumerable<T> enumerable, params T[] appended)
+        public static int IndexOf<T>(this IEnumerable<T> values, T searchFor)
         {
-            foreach (var e in enumerable)
+            int i = 0;
+            foreach (var v in values)
             {
-                yield return e;
-            }
-            foreach (var a in appended)
-            {
-                yield return a;
-            }
-        }
-        public static IEnumerable<T> SkipLast<T>(this IEnumerable<T> enumerable)
-        {
-            var e = enumerable.GetEnumerator();
-            if (e.MoveNext())
-            {
-                var last = e.Current;
-                while (e.MoveNext())
+                if (v.Equals(searchFor))
                 {
-                    yield return last;
-                    last = e.Current;
+                    return i;
+                }
+                ++i;
+            }
+            return -1;
+        }
+        public static T? FirstOrNull<T>(this IEnumerable<T> values, Func<T, bool> predicate) where T : struct
+        {
+            foreach (var v in values)
+            {
+                if (predicate(v))
+                {
+                    return v;
                 }
             }
+            return null;
         }
-        public static IDictionary<K,V> RemoveMany<K, V>(this IDictionary<K, V> dict, IEnumerable<K> enumerable)
+        public static T MaxBy<T>(this IEnumerable<T> values, IComparer<T> comparer)
         {
-            foreach (var e in enumerable) { 
-                dict.Remove(e); 
-            }
-            return dict;
-        }
-        public static IEnumerable<T> AllAfter<T>(this IEnumerable<T> source, Func<T, bool> predicate) 
-        {
-            using (var enumerator = source.GetEnumerator())
-            {
-                while (enumerator.MoveNext() && !predicate(enumerator.Current)) { }
-                while (enumerator.MoveNext()) { yield return enumerator.Current; }
-            }
+            return values.Aggregate(values.First(),(accum, v) => comparer.Compare(v, accum) > 1 ? v : accum);
         }
     }
 }
