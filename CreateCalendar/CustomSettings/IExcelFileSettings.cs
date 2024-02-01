@@ -8,7 +8,7 @@ namespace CreateCalendar.CustomSettings
         string DateCol { get; }
         string EmployeeNamesBeneath { get; }
         string SheetnamePattern { get; }
-        string DateCommentsCol { get; }
+        string? DateCommentsCol { get; }
         IList<string> SpecialShiftHeaders { get; }
         IList<string> IgnoreShifts { get; }
         IList<string> NonAvailableShifts { get; }

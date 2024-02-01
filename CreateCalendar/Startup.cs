@@ -14,6 +14,9 @@ namespace CreateCalendar
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PnPCoreOptions))]
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PnPCoreAuthenticationOptions))]
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(CreateCalendarSettings))]
+        // [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PnPCoreSitesOptions))]
+        // [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PnPCoreSiteOptions))]
+        // [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Dictionary<string, PnPCoreSiteOptions>))]
         // [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(List<CreateCalendarFileSettings>))]
         // [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(ExcelRosterSettings))]
         public static IHost HostBuilder(string? path = null)

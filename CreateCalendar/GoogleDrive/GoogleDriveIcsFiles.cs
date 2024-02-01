@@ -3,27 +3,21 @@ using Google.Apis.Drive.v3;
 using Google.Apis.Drive.v3.Data;
 using Google.Apis.Services;
 using Google.Apis.Util.Store;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace CreateCalendar.GoogleDrive
 {
     internal sealed class GoogleDriveIcsFiles: IDisposable
     {
         private readonly DriveService _driveService;
+        private readonly string _rootFolderId;
         private const string _folderMimeType = "application/vnd.google-apps.folder";
         private const string _calendarMimeType = "text/calendar";
-
-        private GoogleDriveIcsFiles(DriveService driveService)
+        private GoogleDriveIcsFiles(DriveService driveService, string rootFolderId)
         {
             _driveService = driveService;
+            _rootFolderId = rootFolderId;
         }
         public string WorkingFolderId { get; set; }
-        private string RootFolderId { get; set; }
         public static async Task<GoogleDriveIcsFiles> Create(string user)
         {
             UserCredential usrCred;
@@ -43,10 +37,7 @@ namespace CreateCalendar.GoogleDrive
             });
             var request = driveService.Files.Get("root");
             request.Fields = "id";
-            return new GoogleDriveIcsFiles(driveService)
-            {
-                RootFolderId = (await request.ExecuteAsync()).Id
-            };
+            return new GoogleDriveIcsFiles(driveService, (await request.ExecuteAsync()).Id);
         }
 
         public async Task<Uri> CreateFile(string fileName, Stream fileContents)
@@ -58,7 +49,7 @@ namespace CreateCalendar.GoogleDrive
                     ? fileName
                     : (fileName + calendarFileExt),
                 MimeType = _calendarMimeType,
-                Parents = new[] { WorkingFolderId ?? RootFolderId },
+                Parents = new[] { WorkingFolderId ?? _rootFolderId },
             };
 
             var request = _driveService.Files.Create(driveFile, fileContents, _calendarMimeType);
@@ -103,7 +94,7 @@ namespace CreateCalendar.GoogleDrive
             fileList.Fields = "nextPageToken, files(id,name,size)";
 
             var result = new List<Google.Apis.Drive.v3.Data.File>();
-            string pageToken = null;
+            string? pageToken = null;
             do
            {
                 fileList.PageToken = pageToken;
@@ -124,7 +115,7 @@ namespace CreateCalendar.GoogleDrive
             fileList.Fields = "files(id,name,parents)";
             var filesResult = await fileList.ExecuteAsync();
 
-            string lastFolderId = RootFolderId;
+            string lastFolderId = _rootFolderId;
             foreach (var folder in folders)
             {
                 var match = filesResult.Files.SingleOrDefault(f => f.Name == folder

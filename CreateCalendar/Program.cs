@@ -7,6 +7,7 @@ using CreateCalendar.ProcessXlCalendar;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using PnP.Core.Auth.Services.Builder.Configuration;
 using PnP.Core.Services;
 
 Console.WriteLine("Initialising...");
@@ -23,6 +24,7 @@ var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 var opts = scope.ServiceProvider.GetRequiredService<IOptions<CreateCalendarSettings>>().Value;
 
 var calData = new List<ProcessedXlFileDetails>();
+
 using (var context = await pnpContextFactory.CreateAsync("SiteToWorkWith"))
 {
     foreach (var opt in opts.Calendars)

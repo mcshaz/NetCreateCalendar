@@ -103,9 +103,9 @@ namespace TestRosterToCal
 
     internal class MockEventSettings : IEventSettings
     {
-        public string IcsFilename { get; set; } 
-        public string FormatShift { get; set; } 
+        public required string IcsFilename { get; set; } 
+        public required string FormatShift { get; set; } 
         public OldAppointmentOptions OldAppointments { get; set; }
-        public Dictionary<string, string> AppointmentKeyValues { get; set; }
+        public Dictionary<string, string> AppointmentKeyValues { get; set; } = [];
     }
 }

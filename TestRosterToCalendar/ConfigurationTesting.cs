@@ -21,6 +21,7 @@ namespace TestRosterToCal
             Assert.AreEqual(2, pnpOpts.Value.Calendars.Count);
             Assert.IsNotNull(pnpOpts.Value.Calendars[0].ExcelRoster);
             Assert.AreEqual("C", pnpOpts.Value.Calendars[0].ExcelRoster.DateCommentsCol);
+            Assert.AreEqual("SCUH", pnpOpts.Value.Calendars[0].AppointmentKeyValues["LOCATION"]);
         }
     }
 }
