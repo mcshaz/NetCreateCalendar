@@ -31,6 +31,8 @@ namespace CreateCalendar
                 })
                 .ConfigureServices((hostingContext, services) =>
                 {
+                    // using DSS Sharepoint Read - the Manifest of which can be found at:
+                    // https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Manifest/appId/bafef36f-1067-4238-9a75-d2f450740d38/isMSAApp~/false
                     var pnpConfig = hostingContext.Configuration.GetSection("PnPCore");
                     // Add the PnP Core SDK library services
                     services.AddPnPCore();

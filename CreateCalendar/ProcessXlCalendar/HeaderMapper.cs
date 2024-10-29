@@ -32,7 +32,7 @@ namespace CreateCalendar.ProcessXlCalendar
                 string.Empty
             };
             _dateCol = settings.DateCol;
-            _colMapper = new Dictionary<string, ColDetails>();
+            _colMapper = [];
 
             if (!string.IsNullOrEmpty(settings.DateCommentsCol))
             {
@@ -70,7 +70,7 @@ namespace CreateCalendar.ProcessXlCalendar
                 }
             }
             _maxCol = _colMapper.Keys.MaxBy(ColLetterComparer.Instance);
-            Roster = new List<ExcelCalDataRow>();
+            Roster = [];
             _stringMapper = stringMapper;
         }
         /// <summary>
@@ -93,7 +93,7 @@ namespace CreateCalendar.ProcessXlCalendar
                         newCalDataRow = new ExcelCalDataRow
                         {
                             Date = dt,
-                            Shifts = new List<EmployeeShift>()
+                            Shifts = []
                         };
                         break;
                     }

@@ -9,8 +9,9 @@ namespace CreateCalendar.CreateIcs
 {
     internal class EmployeeShiftComparer : IEqualityComparer<EmployeeShift>
     {
-        public bool Equals(EmployeeShift x, EmployeeShift y)
+        public bool Equals(EmployeeShift? x, EmployeeShift? y)
         {
+            if (x == null || y == null) return x == y;
             return x.EmployeeName == y.EmployeeName && x.ShiftName == y.ShiftName;
         }
 

@@ -1,4 +1,5 @@
 ﻿using Google.Apis.Auth.OAuth2;
+using Google.Apis.Auth.OAuth2.Responses;
 using Google.Apis.Drive.v3;
 using Google.Apis.Drive.v3.Data;
 using Google.Apis.Services;
@@ -17,7 +18,7 @@ namespace CreateCalendar.GoogleDrive
             _driveService = driveService;
             _rootFolderId = rootFolderId;
         }
-        public string WorkingFolderId { get; set; }
+        public string? WorkingFolderId { get; set; }
         public static async Task<GoogleDriveIcsFiles> Create(string user)
         {
             UserCredential usrCred;
@@ -25,10 +26,16 @@ namespace CreateCalendar.GoogleDrive
             {
                 GoogleClientSecrets fromStream = await GoogleClientSecrets.FromStreamAsync(strm);
                 usrCred = await GoogleWebAuthorizationBroker.AuthorizeAsync(fromStream.Secrets,
-                    new[] { DriveService.Scope.Drive, DriveService.Scope.DriveFile },
+                    [DriveService.Scope.Drive], // , DriveService.Scope.DriveFile
                     user,
                     CancellationToken.None,
                     new FileDataStore("Drive.Auth.Store"));
+                if (usrCred.Token == null || 
+                        (usrCred.Token.ExpiresInSeconds.HasValue &&
+                            (usrCred.Token.IssuedUtc + TimeSpan.FromSeconds(usrCred.Token.ExpiresInSeconds.Value)) < DateTime.UtcNow))
+                {
+                    await usrCred.GetAccessTokenForRequestAsync();
+                }
             }
             var driveService = new DriveService(new BaseClientService.Initializer()
             {
@@ -49,7 +56,7 @@ namespace CreateCalendar.GoogleDrive
                     ? fileName
                     : (fileName + calendarFileExt),
                 MimeType = _calendarMimeType,
-                Parents = new[] { WorkingFolderId ?? _rootFolderId },
+                Parents = [WorkingFolderId ?? _rootFolderId],
             };
 
             var request = _driveService.Files.Create(driveFile, fileContents, _calendarMimeType);
@@ -131,7 +138,7 @@ namespace CreateCalendar.GoogleDrive
             {
                 Name = folderName,
                 MimeType = _folderMimeType,
-                Parents = new[] { parentFolderId }
+                Parents = [parentFolderId]
             };
             var request = _driveService.Files.Create(fileMetadata);
             request.Fields = "id";

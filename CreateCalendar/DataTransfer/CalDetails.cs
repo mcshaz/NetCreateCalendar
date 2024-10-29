@@ -20,7 +20,7 @@ namespace CreateCalendar.DataTransfer
         private int _summaryLineIndex = -1;
         private int _statusLineIndex = -1;
 
-        private readonly List<string> _content = new List<string>();
+        private readonly List<string> _content = [];
 
         public const string EndApptLine = "END:VEVENT";
         public const string UidPrefix = "UID:";
@@ -41,7 +41,7 @@ namespace CreateCalendar.DataTransfer
                 if (_summaryLineIndex == -1)
                 {
                     // could throw here - summary should be part of vevent
-                    _content[_content.Count - 1] = newSummary;
+                    _content[^1] = newSummary;
                     _content.Add(EndApptLine);
                 }
                 else
@@ -70,12 +70,12 @@ namespace CreateCalendar.DataTransfer
                     newStatus += "CONFIRMED";
                     if (Summary.StartsWith(CancelledSummaryPrefix))
                     {
-                        Summary = Summary.Substring(CancelledSummaryPrefix.Length);
+                        Summary = Summary[CancelledSummaryPrefix.Length..];
                     }
                 }
                 if (_statusLineIndex == -1)
                 {
-                    _content[_content.Count - 1] = newStatus;
+                    _content[^1] = newStatus;
                     _content.Add(EndApptLine);
                 }
                 else 
@@ -93,7 +93,7 @@ namespace CreateCalendar.DataTransfer
                 var newLastModified = LastModifiedPrefix + IcsDateHelpers.IcsDateFormat(value);
                 if (_lastModifiedLineIndex == -1)
                 {
-                    _content[_content.Count - 1] = newLastModified;
+                    _content[^1] = newLastModified;
                     _content.Add(EndApptLine);
                 }
                 else
@@ -111,7 +111,7 @@ namespace CreateCalendar.DataTransfer
                 var newDtStamp = DtStampPrefix + IcsDateHelpers.IcsDateFormat(value);
                 if (_dtStampLineIndex == -1)
                 {
-                    _content[_content.Count - 1] = newDtStamp;
+                    _content[^1] = newDtStamp;
                     _content.Add(EndApptLine);
                 }
                 else
@@ -129,7 +129,7 @@ namespace CreateCalendar.DataTransfer
                 var newSequence = SequencePrefix + value;
                 if (_sequenceLineIndex == -1)
                 {
-                    _content[_content.Count - 1] = newSequence;
+                    _content[^1] = newSequence;
                     _content.Add(EndApptLine);
                 }
                 else
@@ -153,35 +153,35 @@ namespace CreateCalendar.DataTransfer
             }
             if (line.StartsWith(UidPrefix))
             {
-                Uid = line.Substring(UidPrefix.Length);
+                Uid = line[UidPrefix.Length..];
             }
             else if (line.StartsWith(SummaryPrefix))
             {
-                _summary = line.Substring(SummaryPrefix.Length);
+                _summary = line[SummaryPrefix.Length..];
                 _summaryLineIndex = _content.Count - 1;
             }
             else if (line.StartsWith(LastModifiedPrefix))
             {
-                _lastModified = ICalDtTimeToNet(line.Substring(LastModifiedPrefix.Length));
+                _lastModified = ICalDtTimeToNet(line[LastModifiedPrefix.Length..]);
                 _lastModifiedLineIndex = _content.Count - 1;
             }
             else if (line.StartsWith(CreatedPrefix))
             {
-                Created = ICalDtTimeToNet(line.Substring(CreatedPrefix.Length));
+                Created = ICalDtTimeToNet(line[CreatedPrefix.Length..]);
             }
             else if (line.StartsWith(DtStampPrefix))
             {
-                _dtStamp = ICalDtTimeToNet(line.Substring(DtStampPrefix.Length));
+                _dtStamp = ICalDtTimeToNet(line[DtStampPrefix.Length..]);
                 _dtStampLineIndex = _content.Count - 1;
             }
             else if (line.StartsWith(StatusPrefix))
             {
-                _isCancelled = line.Substring(StatusPrefix.Length) == "CANCELLED";
+                _isCancelled = line[StatusPrefix.Length..] == "CANCELLED";
                 _statusLineIndex = _content.Count - 1;
             }
             else if (line.StartsWith(SequencePrefix))
             {
-                var seq = int.Parse(line.Substring(SequencePrefix.Length));
+                var seq = int.Parse(line[SequencePrefix.Length..]);
                 _sequence = seq;
                 _sequenceLineIndex = _content.Count - 1;
             }
@@ -197,7 +197,7 @@ namespace CreateCalendar.DataTransfer
         public static DateTime ICalDtTimeToNet(string icalDtTime)
         {
             return new DateTime(
-                int.Parse(icalDtTime.Substring(0, 4)),
+                int.Parse(icalDtTime[..4]),
                 int.Parse(icalDtTime.Substring(4, 2)),
                 int.Parse(icalDtTime.Substring(6, 2)),
                 int.Parse(icalDtTime.Substring(9, 2)),

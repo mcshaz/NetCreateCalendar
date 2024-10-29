@@ -7,7 +7,6 @@ using CreateCalendar.ProcessXlCalendar;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using PnP.Core.Auth.Services.Builder.Configuration;
 using PnP.Core.Services;
 
 Console.WriteLine("Initialising...");
@@ -25,8 +24,9 @@ var opts = scope.ServiceProvider.GetRequiredService<IOptions<CreateCalendarSetti
 
 var calData = new List<ProcessedXlFileDetails>();
 
-using (var context = await pnpContextFactory.CreateAsync("SiteToWorkWith"))
+try
 {
+    var context = await pnpContextFactory.CreateAsync("SiteToWorkWith");
     foreach (var opt in opts.Calendars)
     {
         var file = await context.Web.GetFileByServerRelativeUrlAsync(opt.ExcelRoster.Url);
@@ -69,6 +69,15 @@ using (var context = await pnpContextFactory.CreateAsync("SiteToWorkWith"))
         }
     }
 }
+catch (HttpRequestException hre)
+{
+    if (hre.HttpRequestError == HttpRequestError.ConnectionError)
+    {
+        Console.WriteLine("Please check your internet connection");
+    }
+    return -1;
+    // throw;
+}
 using var googleDrive = await GoogleDriveIcsFiles.Create(opts.GoogleUser);
 foreach (var processedData in calData)
 {
@@ -80,17 +89,22 @@ foreach (var processedData in calData)
         processedData.Settings,
         async fileName =>
         {
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
             if (allFiles.TryGetValue(fileName, out Google.Apis.Drive.v3.Data.File f))
             {
+#pragma warning disable CS8629 // Nullable value type may be null.
                 var ms = new MemoryStream(capacity: (int)f.Size);
+#pragma warning restore CS8629 // Nullable value type may be null.
                 await googleDrive.WriteToStream(f.Id, ms);
                 return ms;
             }
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
             return null;
         },
         async (fileName, stream) =>
         {
             Uri findFile;
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
             if (allFiles.TryGetValue(fileName, out Google.Apis.Drive.v3.Data.File f))
             {
                 findFile = await googleDrive.UpdateFile(f, stream);
@@ -99,7 +113,10 @@ foreach (var processedData in calData)
             {
                 findFile = await googleDrive.CreateFile(fileName, stream);
             }
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
             Console.WriteLine($"{fileName} {findFile}");
         }
     );
 }
+
+return 0;

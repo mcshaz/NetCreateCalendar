@@ -19,9 +19,9 @@ namespace TestRosterToCal
             {
                 Url = "/",
                 DateCommentsCol = "C",
-                SpecialShiftHeaders = new[] { "2nd Oncall" },
-                IgnoreShifts = new[] { "RDO", "PH" },
-                NonAvailableShifts = new[] { "Leave", "PDL" }
+                SpecialShiftHeaders = { "2nd Oncall" },
+                IgnoreShifts = { "RDO", "PH" },
+                NonAvailableShifts = { "Leave", "PDL" }
             };
             var xlDataReader = new XlDataReader(
                 xlRosterSettings
@@ -66,8 +66,8 @@ namespace TestRosterToCal
             {
                 Url = "/",
                 DateCommentsCol = "C",
-                IgnoreShifts = new[] { "RDO", "SD" },
-                NonAvailableShifts = new[] { "Leave", "PDL" }, 
+                IgnoreShifts = { "RDO", "SD" },
+                NonAvailableShifts = { "Leave", "PDL" }, 
             };
             var xlDataReader = new XlDataReader(
                 xlRosterSettings

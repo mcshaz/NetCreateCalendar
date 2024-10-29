@@ -9,10 +9,10 @@ namespace CreateCalendar.CustomSettings
         public string EmployeeNamesBeneath { get; set; } = "Roster";
         public string SheetnamePattern { get; set; } = @"^20\d\d$";
         public string? DateCommentsCol { get; set; }
-        public IList<string> SpecialShiftHeaders { get; set; } = new List<string>();
+        public IList<string> SpecialShiftHeaders { get; set; } = [];
 
-        public IList<string> IgnoreShifts { get; set; } = new List<string>();
+        public IList<string> IgnoreShifts { get; set; } = [];
 
-        public IList<string> NonAvailableShifts { get; set; } = new List<string>();
+        public IList<string> NonAvailableShifts { get; set; } = [];
     }
 }

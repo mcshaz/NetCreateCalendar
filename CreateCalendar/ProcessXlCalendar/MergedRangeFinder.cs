@@ -10,7 +10,7 @@ namespace CreateCalendar.ProcessXlCalendar
         private readonly List<AddressRange> _mergedRanges;
         public MergedRangeFinder(Worksheet ws) 
         { 
-            _mergedRanges = new List<AddressRange>();
+            _mergedRanges = [];
             foreach (var mergeCells in ws.Elements<MergeCells>())
             {
                 foreach (MergeCell mergeCell in mergeCells.OfType<MergeCell>())

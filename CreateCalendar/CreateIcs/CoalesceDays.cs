@@ -17,7 +17,7 @@ namespace CreateCalendar.CreateIcs
                 var otherShiftComparer = new EmployeeShiftComparer();
                 foreach (var d in rosterDays.Skip(1))
                 {
-                    var isSequentiialDay = d.Date.DayNumber - lastShift.EndDate.DayNumber == 1;
+                    var isSequentiialDay = d.Date.DayNumber - lastShift!.EndDate.DayNumber == 1;
                     if (isSequentiialDay && d.Shift == lastShift.Shift)
                     {
                         lastShift.EndDate = d.Date;
@@ -66,12 +66,12 @@ namespace CreateCalendar.CreateIcs
                         lastShift = MapDayToRange(d);
                     }
                 }
-                lastShift.UId = CreateUid(rosterId, lastShift);
+                lastShift!.UId = CreateUid(rosterId, lastShift);
                 returnVar.Add(lastShift);
             }
             return returnVar;
         }
-        private static PerUserRosterDayRange MapDayToRange(PerUserRosterDay dayRoster)
+        private static PerUserRosterDayRange? MapDayToRange(PerUserRosterDay? dayRoster)
         {
             if (dayRoster == null) { return null; }
             var dateRangeComments = new List<DateRangeComments>();
@@ -90,13 +90,13 @@ namespace CreateCalendar.CreateIcs
                 EndDate = dayRoster.Date,
                 Shift = dayRoster.Shift,
                 DateRangeComments = dateRangeComments,
-                Others = new List<OthersDay> { 
-                    new OthersDay { 
+                Others = [ 
+                    new() { 
                         Date = dayRoster.Date, 
                         EndDate = dayRoster.Date, 
                         OtherEmployeesAvailable = dayRoster.OtherEmployeesAvailable,
                     } 
-                }
+                ]
             };
         }
 
@@ -105,7 +105,7 @@ namespace CreateCalendar.CreateIcs
             var hash = HashHelpers.CreateXxHash64(rosterId, dayRangeRoster.Shift, dayRangeRoster.Date, dayRangeRoster.EndDate);
             var base64Hash = Convert.ToBase64String(hash);
             // to do remove last '=' filling last byte
-            return $"{base64Hash.Substring(0, base64Hash.Length - 1)}@bmcsh.scuh";
+            return $"{base64Hash[..^1]}@bmcsh.scuh";
         }
     }
 }

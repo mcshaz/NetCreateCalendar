@@ -11,7 +11,7 @@ namespace CreateCalendar.Utilities
             int indx = 1; // 1st will always be a column letter
             var address = cell.CellReference.Value;
             while (!char.IsDigit(address[indx])) { ++indx; }
-            return address.Substring(0, indx);
+            return address[..indx];
         }
 
         internal static int ColumnReferenceC1(this Cell cell)
@@ -21,9 +21,9 @@ namespace CreateCalendar.Utilities
         internal static int RowReference(this DocumentFormat.OpenXml.Spreadsheet.Cell cell)
         {
             int indx = 1;
-            var address = cell.CellReference.Value;
-            while (!char.IsDigit(address[indx])) { ++indx; }
-            return int.Parse(address.Substring(indx));
+            var address = cell.CellReference!.Value;
+            while (!char.IsDigit(address![indx])) { ++indx; }
+            return int.Parse(address[indx..]);
         }
         internal static bool TryGetString(this Cell cell, string[] lookup, out string val)
         {
@@ -52,7 +52,7 @@ namespace CreateCalendar.Utilities
             val = DateOnly.FromDayNumber(0);
             return false;
         }
-        internal static T Closest<T>(this Cell cell) where T : OpenXmlElement
+        internal static T? Closest<T>(this Cell cell) where T : OpenXmlElement
         {
             var p = cell.Parent;
             while (p != null && p.GetType() != typeof(T))

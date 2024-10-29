@@ -27,8 +27,8 @@ namespace CreateCalendar.ProcessXlCalendar
                 }
                 ++i;
             }
-            _leftBorderedStyles = new HashSet<uint>();
-            _rightBorderedStyles = new HashSet<uint>();
+            _leftBorderedStyles = [];
+            _rightBorderedStyles = [];
             i = 0U;
             foreach (var cf in workbookPart.WorkbookStylesPart.Stylesheet.CellFormats.ChildElements.OfType<CellFormat>())
             {
