@@ -32,7 +32,7 @@ namespace CreateCalendar.GoogleDrive
                     new FileDataStore("Drive.Auth.Store"));
                 if (usrCred.Token == null || 
                         (usrCred.Token.ExpiresInSeconds.HasValue &&
-                            (usrCred.Token.IssuedUtc + TimeSpan.FromSeconds(usrCred.Token.ExpiresInSeconds.Value)) < DateTime.UtcNow))
+                            (usrCred.Token.IssuedUtc + TimeSpan.FromSeconds(usrCred.Token.ExpiresInSeconds.Value - 5)) < DateTime.UtcNow))
                 {
                     await usrCred.GetAccessTokenForRequestAsync();
                 }
